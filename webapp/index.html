@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>OLX Liquidity</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div id="app">
+        <header class="header">
+            <h1>📊 OLX Liquidity</h1>
+            <p class="subtitle">Аналіз ліквідності для перепродажу</p>
+        </header>
+
+        <div class="filters">
+            <div class="period-selector">
+                <button class="period-btn active" data-period="1">1 день</button>
+                <button class="period-btn" data-period="7">7 днів</button>
+                <button class="period-btn" data-period="30">30 днів</button>
+                <button class="period-btn" data-period="90">90 днів</button>
+            </div>
+            <div class="price-selector">
+                <button class="price-btn active" data-min="4000" data-max="20000">Всі</button>
+                <button class="price-btn" data-min="4000" data-max="8000">4–8k</button>
+                <button class="price-btn" data-min="8000" data-max="12000">8–12k</button>
+                <button class="price-btn" data-min="12000" data-max="16000">12–16k</button>
+                <button class="price-btn" data-min="16000" data-max="20000">16–20k</button>
+            </div>
+            <div class="search-box">
+                <input type="text" id="search" placeholder="🔍 Пошук категорії...">
+            </div>
+        </div>
+
+        <nav class="tabs">
+            <button class="tab active" data-tab="top">🏆 Топ ліквідних</button>
+            <button class="tab" data-tab="active">📦 Продається зараз</button>
+        </nav>
+
+        <div id="loading" class="loading hidden">
+            <div class="spinner"></div>
+            <p>Завантаження...</p>
+        </div>
+
+        <div id="content-top" class="tab-content active">
+            <div id="top-list" class="category-list"></div>
+        </div>
+
+        <div id="content-active" class="tab-content">
+            <div id="active-list" class="category-list"></div>
+        </div>
+
+        <div id="detail-modal" class="modal hidden">
+            <div class="modal-content">
+                <button class="modal-close" id="modal-close">✕</button>
+                <h2 id="detail-title"></h2>
+                <div class="detail-stats" id="detail-stats"></div>
+                <div class="chart-container">
+                    <canvas id="liquidity-chart"></canvas>
+                </div>
+                <h3>Розподіл цін</h3>
+                <div id="price-dist" class="price-dist"></div>
+                <h3>Приклади проданих</h3>
+                <div id="sold-examples" class="sold-list"></div>
+            </div>
+        </div>
+
+        <footer class="footer">
+            <p>Оновлення: щодня о 8:00 🇺🇦</p>
+        </footer>
+    </div>
+    <script src="/static/app.js"></script>
+</body>
+</html>
