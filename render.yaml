@@ -16,10 +16,6 @@ services:
       - key: WEBAPP_URL
         sync: false
       - key: DATABASE_PATH
-        value: /opt/render/project/src/data/liquidity.db
+        value: liquidity.db
       - key: SCRAPE_ENABLED
         value: "true"
-    disk:
-      name: liquidity-data
-      mountPath: /opt/render/project/src/data
-      sizeGB: 1
