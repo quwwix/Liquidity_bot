@@ -168,8 +168,8 @@ function renderChart(history) {
             datasets: [{
                 label: 'Ліквідність %',
                 data: history.map(h => h.liquidity),
-                borderColor: '#6ab2f2',
-                backgroundColor: 'rgba(106, 178, 242, 0.1)',
+                borderColor: '#d63351',
+                backgroundColor: 'rgba(214, 51, 81, 0.1)',
                 fill: true,
                 tension: 0.3,
                 pointRadius: 3,

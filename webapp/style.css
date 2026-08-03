@@ -1,15 +1,15 @@
 :root {
-    --tg-theme-bg-color: #17212b;
+    --tg-theme-bg-color: #0f0f0f;
     --tg-theme-text-color: #ffffff;
-    --tg-theme-hint-color: #708499;
-    --tg-theme-link-color: #6ab2f2;
-    --tg-theme-button-color: #5288c1;
+    --tg-theme-hint-color: #8c8c8c;
+    --tg-theme-link-color: #d63351;
+    --tg-theme-button-color: #8b0021;
     --tg-theme-button-text-color: #ffffff;
-    --tg-theme-secondary-bg-color: #232e3c;
-    --accent: #6ab2f2;
+    --tg-theme-secondary-bg-color: #1c1c1c;
+    --accent: #d63351;
     --success: #4caf50;
     --warning: #ff9800;
-    --danger: #f44336;
+    --danger: #d63351;
     --card-radius: 12px;
 }
 

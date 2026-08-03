@@ -49,7 +49,7 @@ async def setup_bot_menu(application: Application) -> None:
     try:
         await application.bot.set_chat_menu_button(
             menu_button=MenuButtonWebApp(
-                text="📊 Liquidity",
+                text="📊 Відкрити",
                 web_app=WebAppInfo(url=settings.webapp_url),
             )
         )

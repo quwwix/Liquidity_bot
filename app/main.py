@@ -1,5 +1,3 @@
-"""Main FastAPI application with Telegram bot and scheduler."""
-
 import asyncio
 import logging
 from contextlib import asynccontextmanager
@@ -7,15 +5,16 @@ from pathlib import Path
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from telegram import Update
 from telegram.ext import Application
 
 from app.config import get_settings
 from app.api.routes import router as api_router
 from app.bot.telegram_bot import create_bot_application, setup_bot_menu
-from app.scheduler.jobs import run_daily_scrape, send_daily_digest
+from app.scheduler.jobs import run_daily_scrape
 from app.database import get_db, upsert_category
 from app.scraper.categories import CATEGORIES
 
@@ -42,8 +41,6 @@ async def init_categories():
 async def scheduled_scrape():
     logger.info("Starting scheduled scrape...")
     await run_daily_scrape()
-    if bot_app:
-        await send_daily_digest(bot_app.bot)
 
 
 @asynccontextmanager
@@ -60,24 +57,32 @@ async def lifespan(app: FastAPI):
         replace_existing=True,
     )
     scheduler.start()
-    logger.info("Scheduler started: daily scrape at 8:00 Kyiv time")
 
     if settings.telegram_bot_token:
         bot_app = create_bot_application()
         await bot_app.initialize()
         await bot_app.start()
         await setup_bot_menu(bot_app)
-        await bot_app.updater.start_polling(drop_pending_updates=True)
-        logger.info("Telegram bot started")
+
+        webhook_url = settings.webapp_url.rstrip("/") + "/webhook"
+        if webhook_url.startswith("https://"):
+            await bot_app.bot.set_webhook(
+                url=webhook_url,
+                drop_pending_updates=True,
+            )
+            logger.info("Webhook set to %s", webhook_url)
+        else:
+            await bot_app.updater.start_polling(drop_pending_updates=True)
+            logger.info("Polling mode started")
 
     yield
 
     scheduler.shutdown(wait=False)
     if bot_app:
-        await bot_app.updater.stop()
+        if bot_app.updater and bot_app.updater.running:
+            await bot_app.updater.stop()
         await bot_app.stop()
         await bot_app.shutdown()
-        logger.info("Telegram bot stopped")
 
 
 app = FastAPI(title="OLX Liquidity Tracker", lifespan=lifespan)
@@ -85,6 +90,16 @@ app.include_router(api_router)
 
 webapp_dir = Path(__file__).parent.parent / "webapp"
 app.mount("/static", StaticFiles(directory=webapp_dir), name="static")
+
+
+@app.post("/webhook")
+async def telegram_webhook(request: Request):
+    if bot_app is None:
+        return Response(status_code=503)
+    data = await request.json()
+    update = Update.de_json(data, bot_app.bot)
+    await bot_app.process_update(update)
+    return Response(status_code=200)
 
 
 @app.get("/")
