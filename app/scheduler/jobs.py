@@ -40,18 +40,36 @@ async def run_daily_scrape() -> None:
             active_ids: set[str] = set()
 
             for listing in listings:
-                if settings.price_min <= listing.price <= settings.price_max:
-                    await upsert_listing(
-                        db,
-                        listing.olx_id,
-                        category_id,
-                        listing.title,
-                        listing.price,
-                        listing.url,
-                        snapshot_date,
-                    )
-                    active_ids.add(listing.olx_id)
-                    total_found += 1
+                    if settings.price_min <= listing.price <= settings.price_max:
+                        import json
+                        await upsert_listing(
+                            db,
+                            listing.olx_id,
+                            category_id,
+                            listing.title,
+                            listing.price,
+                            listing.url,
+                            snapshot_date,
+                            description=listing.description,
+                            seller_name=listing.seller_name,
+                            seller_type=listing.seller_type,
+                            location_city=listing.location_city,
+                            location_region=listing.location_region,
+                            location_full=listing.location_full,
+                            phone=listing.phone,
+                            listing_date=listing.listing_date,
+                            category_breadcrumb=listing.category_breadcrumb,
+                            condition=listing.condition,
+                            delivery_available=listing.delivery_available,
+                            safe_deal=listing.safe_deal,
+                            negotiable=listing.negotiable,
+                            views_count=listing.views_count,
+                            images_count=listing.images_count,
+                            images_json=json.dumps(listing.images, ensure_ascii=False),
+                            params_json=json.dumps(listing.params, ensure_ascii=False),
+                        )
+                        active_ids.add(listing.olx_id)
+                        total_found += 1
 
             sold = await mark_sold_listings(db, category_id, active_ids, snapshot_date)
             total_sold += sold

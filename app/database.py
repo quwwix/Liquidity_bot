@@ -26,6 +26,25 @@ CREATE TABLE IF NOT EXISTS listings (
     last_seen TEXT NOT NULL,
     sold_date TEXT,
     status TEXT DEFAULT 'active',
+
+    description TEXT,
+    seller_name TEXT,
+    seller_type TEXT,
+    location_city TEXT,
+    location_region TEXT,
+    location_full TEXT,
+    phone TEXT,
+    listing_date TEXT,
+    category_breadcrumb TEXT,
+    condition TEXT,
+    delivery_available INTEGER DEFAULT 0,
+    safe_deal INTEGER DEFAULT 0,
+    negotiable INTEGER DEFAULT 0,
+    views_count INTEGER DEFAULT 0,
+    images_count INTEGER DEFAULT 0,
+    images_json TEXT,
+    params_json TEXT,
+
     FOREIGN KEY (category_id) REFERENCES categories(id)
 );
 
@@ -109,26 +128,72 @@ async def upsert_listing(
     price: float,
     url: str,
     snapshot_date: str,
+    description: str = "",
+    seller_name: str = "",
+    seller_type: str = "",
+    location_city: str = "",
+    location_region: str = "",
+    location_full: str = "",
+    phone: str = "",
+    listing_date: str = "",
+    category_breadcrumb: str = "",
+    condition: str = "",
+    delivery_available: bool = False,
+    safe_deal: bool = False,
+    negotiable: bool = False,
+    views_count: int = 0,
+    images_count: int = 0,
+    images_json: str = "[]",
+    params_json: str = "{}",
 ) -> int:
-    cursor = await db.execute("SELECT id, first_seen FROM listings WHERE olx_id = ?", (olx_id,))
+    import json
+
+    cursor = await db.execute("SELECT id FROM listings WHERE olx_id = ?", (olx_id,))
     existing = await cursor.fetchone()
 
     if existing:
         listing_id = existing["id"]
         await db.execute(
             """
-            UPDATE listings SET title=?, price=?, url=?, last_seen=?, status='active', sold_date=NULL
+            UPDATE listings SET
+                title=?, price=?, url=?, last_seen=?, status='active', sold_date=NULL,
+                description=?, seller_name=?, seller_type=?,
+                location_city=?, location_region=?, location_full=?,
+                phone=?, listing_date=?, category_breadcrumb=?, condition=?,
+                delivery_available=?, safe_deal=?, negotiable=?,
+                views_count=?, images_count=?, images_json=?, params_json=?
             WHERE id=?
             """,
-            (title, price, url, snapshot_date, listing_id),
+            (
+                title, price, url, snapshot_date,
+                description, seller_name, seller_type,
+                location_city, location_region, location_full,
+                phone, listing_date, category_breadcrumb, condition,
+                int(delivery_available), int(safe_deal), int(negotiable),
+                views_count, images_count, images_json, params_json,
+                listing_id,
+            ),
         )
     else:
         cursor = await db.execute(
             """
-            INSERT INTO listings (olx_id, category_id, title, price, url, first_seen, last_seen, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 'active')
+            INSERT INTO listings (
+                olx_id, category_id, title, price, url, first_seen, last_seen, status,
+                description, seller_name, seller_type,
+                location_city, location_region, location_full,
+                phone, listing_date, category_breadcrumb, condition,
+                delivery_available, safe_deal, negotiable,
+                views_count, images_count, images_json, params_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (olx_id, category_id, title, price, url, snapshot_date, snapshot_date),
+            (
+                olx_id, category_id, title, price, url, snapshot_date, snapshot_date,
+                description, seller_name, seller_type,
+                location_city, location_region, location_full,
+                phone, listing_date, category_breadcrumb, condition,
+                int(delivery_available), int(safe_deal), int(negotiable),
+                views_count, images_count, images_json, params_json,
+            ),
         )
         listing_id = cursor.lastrowid
 
@@ -142,6 +207,7 @@ async def upsert_listing(
     )
     await db.commit()
     return listing_id
+
 
 
 async def mark_sold_listings(db: aiosqlite.Connection, category_id: int, active_olx_ids: set[str], snapshot_date: str) -> int:
