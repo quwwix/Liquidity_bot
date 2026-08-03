@@ -15,6 +15,6 @@ services:
       - key: WEBAPP_URL
         sync: false
       - key: DATABASE_PATH
-        value: liquidity.db
+        value: /var/data/liquidity.db
       - key: SCRAPE_ENABLED
         value: "true"
