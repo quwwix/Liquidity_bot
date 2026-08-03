@@ -8,7 +8,7 @@ from app.scraper.categories import OLX_BASE, CATEGORIES, build_search_url
 
 logger = logging.getLogger(__name__)
 
-MAX_PAGES = 5
+MAX_PAGES = 25
 PAGE_DELAY = 2.0
 
 

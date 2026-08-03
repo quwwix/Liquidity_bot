@@ -1,16 +1,18 @@
 :root {
-    --tg-theme-bg-color: #0f0f0f;
+    --tg-theme-bg-color: #0b090a;
     --tg-theme-text-color: #ffffff;
-    --tg-theme-hint-color: #8c8c8c;
-    --tg-theme-link-color: #d63351;
+    --tg-theme-hint-color: #9e9a9c;
+    --tg-theme-link-color: #e63956;
     --tg-theme-button-color: #8b0021;
     --tg-theme-button-text-color: #ffffff;
-    --tg-theme-secondary-bg-color: #1c1c1c;
-    --accent: #d63351;
-    --success: #4caf50;
+    --tg-theme-secondary-bg-color: #161214;
+    --accent: #e63956;
+    --accent-gradient: linear-gradient(135deg, #a80028 0%, #590015 100%);
+    --card-border: 1px solid rgba(168, 0, 40, 0.25);
+    --success: #2e7d32;
     --warning: #ff9800;
-    --danger: #d63351;
-    --card-radius: 12px;
+    --danger: #e63956;
+    --card-radius: 14px;
 }
 
 * {
@@ -21,7 +23,7 @@
 
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background: var(--tg-theme-bg-color, #17212b);
+    background: var(--tg-theme-bg-color, #0b090a);
     color: var(--tg-theme-text-color, #fff);
     min-height: 100vh;
     -webkit-font-smoothing: antialiased;
@@ -34,27 +36,32 @@ body {
 }
 
 .header {
-    padding: 16px 16px 8px;
+    padding: 20px 16px 10px;
     text-align: center;
 }
 
 .header h1 {
-    font-size: 22px;
-    font-weight: 700;
+    font-size: 24px;
+    font-weight: 800;
+    background: linear-gradient(90deg, #ffffff 0%, #ff4d6d 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
 }
 
 .subtitle {
-    color: var(--tg-theme-hint-color, #708499);
+    color: var(--tg-theme-hint-color);
     font-size: 13px;
     margin-top: 4px;
 }
 
 .filters {
-    padding: 8px 12px;
+    padding: 10px 12px;
     position: sticky;
     top: 0;
-    background: var(--tg-theme-bg-color, #17212b);
+    background: rgba(11, 9, 10, 0.95);
+    backdrop-filter: blur(10px);
     z-index: 10;
+    border-bottom: 1px solid rgba(168, 0, 40, 0.15);
 }
 
 .period-selector, .price-selector {
@@ -72,18 +79,21 @@ body {
 .period-btn, .price-btn {
     flex-shrink: 0;
     padding: 8px 14px;
-    border: none;
+    border: var(--card-border);
     border-radius: 20px;
-    background: var(--tg-theme-secondary-bg-color, #232e3c);
-    color: var(--tg-theme-text-color, #fff);
+    background: var(--tg-theme-secondary-bg-color);
+    color: var(--tg-theme-text-color);
     font-size: 13px;
+    font-weight: 500;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: all 0.2s ease;
 }
 
 .period-btn.active, .price-btn.active {
-    background: var(--tg-theme-button-color, #5288c1);
-    color: var(--tg-theme-button-text-color, #fff);
+    background: var(--accent-gradient);
+    color: #fff;
+    border-color: #e63956;
+    box-shadow: 0 4px 12px rgba(168, 0, 40, 0.4);
 }
 
 .search-box {
@@ -92,40 +102,47 @@ body {
 
 .search-box input {
     width: 100%;
-    padding: 10px 14px;
-    border: none;
+    padding: 11px 14px;
+    border: var(--card-border);
     border-radius: var(--card-radius);
-    background: var(--tg-theme-secondary-bg-color, #232e3c);
-    color: var(--tg-theme-text-color, #fff);
+    background: var(--tg-theme-secondary-bg-color);
+    color: var(--tg-theme-text-color);
     font-size: 14px;
     outline: none;
+    transition: border-color 0.2s;
+}
+
+.search-box input:focus {
+    border-color: var(--accent);
 }
 
 .search-box input::placeholder {
-    color: var(--tg-theme-hint-color, #708499);
+    color: var(--tg-theme-hint-color);
 }
 
 .tabs {
     display: flex;
-    padding: 8px 12px;
+    padding: 10px 12px;
     gap: 8px;
 }
 
 .tab {
     flex: 1;
-    padding: 10px;
-    border: none;
+    padding: 12px;
+    border: var(--card-border);
     border-radius: var(--card-radius);
-    background: var(--tg-theme-secondary-bg-color, #232e3c);
-    color: var(--tg-theme-text-color, #fff);
-    font-size: 13px;
-    font-weight: 600;
+    background: var(--tg-theme-secondary-bg-color);
+    color: var(--tg-theme-text-color);
+    font-size: 14px;
+    font-weight: 700;
     cursor: pointer;
     transition: all 0.2s;
 }
 
 .tab.active {
-    background: var(--tg-theme-button-color, #5288c1);
+    background: var(--accent-gradient);
+    border-color: var(--accent);
+    box-shadow: 0 4px 14px rgba(168, 0, 40, 0.4);
 }
 
 .tab-content {
@@ -144,11 +161,17 @@ body {
 }
 
 .category-card {
-    background: var(--tg-theme-secondary-bg-color, #232e3c);
+    background: var(--tg-theme-secondary-bg-color);
+    border: var(--card-border);
     border-radius: var(--card-radius);
     padding: 14px 16px;
     cursor: pointer;
-    transition: transform 0.15s;
+    transition: all 0.2s ease;
+}
+
+.category-card:hover {
+    border-color: rgba(230, 57, 86, 0.5);
+    box-shadow: 0 4px 16px rgba(168, 0, 40, 0.2);
 }
 
 .category-card:active {
@@ -164,15 +187,17 @@ body {
 
 .card-name {
     font-size: 15px;
-    font-weight: 600;
+    font-weight: 700;
 }
 
 .card-rank {
     font-size: 12px;
-    color: var(--tg-theme-hint-color);
-    background: rgba(255,255,255,0.08);
+    color: #e63956;
+    background: rgba(168, 0, 40, 0.2);
+    border: 1px solid rgba(230, 57, 86, 0.3);
     padding: 2px 8px;
     border-radius: 10px;
+    font-weight: 600;
 }
 
 .card-metrics {
