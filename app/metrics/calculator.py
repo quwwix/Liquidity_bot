@@ -57,7 +57,8 @@ async def calculate_category_metrics(
         """
         SELECT AVG(
             julianday(sold_date) - julianday(first_seen)
-        ) as avg_days
+        ) as avg_days,
+        AVG(price) as avg_sold_price
         FROM listings
         WHERE category_id = ? AND status = 'sold'
         AND price >= ? AND price <= ?
@@ -68,6 +69,21 @@ async def calculate_category_metrics(
     )
     row = await cursor.fetchone()
     avg_speed = round(row["avg_days"] or 0, 1)
+    avg_sold_price = round(row["avg_sold_price"] or 0, 0)
+
+    cursor = await db.execute(
+        """
+        SELECT AVG(price) as avg_active_price FROM listings
+        WHERE category_id = ? AND status = 'active'
+        AND price >= ? AND price <= ?
+        """,
+        (category_id, price_min, price_max),
+    )
+    avg_active_price = round((await cursor.fetchone())["avg_active_price"] or 0, 0)
+
+    margin_pct = 0.0
+    if avg_sold_price > 0 and avg_active_price > avg_sold_price:
+        margin_pct = round(((avg_active_price - avg_sold_price) / avg_sold_price) * 100, 1)
 
     return {
         "active_count": active_now,
@@ -76,6 +92,9 @@ async def calculate_category_metrics(
         "liquidity": round(liquidity, 1),
         "speed_days": avg_speed,
         "volume": sold_in_period,
+        "avg_price": avg_active_price,
+        "avg_sold_price": avg_sold_price,
+        "margin_pct": margin_pct,
     }
 
 

@@ -137,6 +137,8 @@ async function openDetail(categoryId) {
             <div class="stat-box"><div class="value">${data.speed_days}</div><div class="label">Днів до продажу</div></div>
             <div class="stat-box"><div class="value">${data.volume}</div><div class="label">Продано</div></div>
             <div class="stat-box"><div class="value">${data.active_count}</div><div class="label">Активних</div></div>
+            <div class="stat-box"><div class="value">${data.avg_price ? Math.round(data.avg_price).toLocaleString() + ' ₴' : '-'}</div><div class="label">Сер. ціна</div></div>
+            <div class="stat-box"><div class="value">${data.margin_pct ? '+' + data.margin_pct + '%' : '0%'}</div><div class="label">Маржинальність</div></div>
         `;
 
         renderChart(data.liquidity_history);
