@@ -112,7 +112,11 @@ async def health():
 
 @router.get("/trigger-scrape")
 async def trigger_scrape_endpoint():
-    import asyncio
+    import asyncio, json
+    from fastapi import Response
     from app.scheduler.jobs import run_daily_scrape
     asyncio.create_task(run_daily_scrape())
-    return {"status": "started", "message": "Скрапінг успішно запущено у фоні"}
+    return Response(
+        content=json.dumps({"status": "started", "message": "Скрапінг успішно запущено у фоні"}, ensure_ascii=False),
+        media_type="application/json; charset=utf-8",
+    )
