@@ -43,12 +43,27 @@ async def scheduled_scrape():
     await run_daily_scrape()
 
 
+async def check_and_run_initial_scrape():
+    db = await get_db()
+    try:
+        cursor = await db.execute("SELECT COUNT(*) as cnt FROM listings")
+        row = await cursor.fetchone()
+        if row and row["cnt"] == 0:
+            logger.info("Database is empty, triggering initial scrape on startup...")
+            await run_daily_scrape()
+    except Exception as e:
+        logger.warning("Error checking initial scrape: %s", e)
+    finally:
+        await db.close()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global bot_app
     settings = get_settings()
 
     await init_categories()
+    asyncio.create_task(check_and_run_initial_scrape())
 
     scheduler.add_job(
         scheduled_scrape,

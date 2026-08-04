@@ -108,3 +108,11 @@ async def get_category(
 @router.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+@router.get("/trigger-scrape")
+async def trigger_scrape_endpoint():
+    import asyncio
+    from app.scheduler.jobs import run_daily_scrape
+    asyncio.create_task(run_daily_scrape())
+    return {"status": "started", "message": "Скрапінг успішно запущено у фоні"}
