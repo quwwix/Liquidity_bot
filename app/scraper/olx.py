@@ -70,12 +70,10 @@ def _safe_text(elements, default="") -> str:
 def _fetch_page(url: str):
     try:
         from scrapling.fetchers import StealthyFetcher
-        fetcher = StealthyFetcher(
+        return StealthyFetcher.fetch(
+            url,
             headless=True,
             network_idle=True,
-        )
-        return fetcher.fetch(
-            url,
             wait_selector='[data-cy="l-card"], [data-testid="l-card"], a[href*="ID"]',
             timeout=60000,
         )
@@ -83,39 +81,33 @@ def _fetch_page(url: str):
         logger.warning("StealthyFetcher failed for %s: %s, trying DynamicFetcher", url, e)
         try:
             from scrapling.fetchers import DynamicFetcher
-            fetcher = DynamicFetcher(
+            return DynamicFetcher.fetch(
+                url,
                 headless=True,
                 network_idle=True,
-            )
-            return fetcher.fetch(
-                url,
                 wait_selector='a[href*="ID"]',
                 timeout=60000,
             )
         except Exception as e2:
             logger.warning("DynamicFetcher failed for %s: %s, trying HTTP Fetcher", url, e2)
             from scrapling.fetchers import Fetcher
-            fetcher = Fetcher(auto_match=False)
-            return fetcher.fetch(url)
+            return Fetcher.get(url)
 
 
 def _fetch_detail_page(url: str):
     try:
         from scrapling.fetchers import StealthyFetcher
-        fetcher = StealthyFetcher(
+        return StealthyFetcher.fetch(
+            url,
             headless=True,
             network_idle=True,
-        )
-        return fetcher.fetch(
-            url,
             timeout=45000,
         )
     except Exception as e:
         logger.warning("Detail fetch failed for %s: %s, trying HTTP Fetcher", url, e)
         try:
             from scrapling.fetchers import Fetcher
-            fetcher = Fetcher(auto_match=False)
-            return fetcher.fetch(url)
+            return Fetcher.get(url)
         except Exception as e2:
             logger.error("HTTP Fetcher detail failed for %s: %s", url, e2)
             return None
