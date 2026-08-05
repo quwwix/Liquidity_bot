@@ -36,7 +36,7 @@ async def run_daily_scrape() -> None:
         for cat in CATEGORIES:
             category_id = await upsert_category(db, cat["slug"], cat["name"], cat["url_path"])
 
-            listings = scrape_category(cat["url_path"], settings.price_min, settings.price_max)
+            listings = scrape_category(cat["url_path"], settings.price_min, settings.price_max, enrich_details=True)
             active_ids: set[str] = set()
 
             for listing in listings:
