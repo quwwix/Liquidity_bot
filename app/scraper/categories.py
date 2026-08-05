@@ -15,7 +15,7 @@ CATEGORIES = [
     {"slug": "televizory", "name": "Телевізори", "url_path": "/uk/elektronika/tv-videotehnika/televizory/"},
     {"slug": "pylososy", "name": "Пилососи", "url_path": "/uk/elektronika/tehnika-dlya-doma/pylesosy/"},
     {"slug": "mikrokhvyli", "name": "Мікрохвильові печі", "url_path": "/uk/elektronika/tehnika-dlya-kuhni/mikrovolnovye-pechi/"},
-    {"slug": "kavovarky", "name": "Кавоварки", "url_path": "/uk/elektronika/tehnika-dlya-kuhni/kofevarki-kofemashiny/"},
+    {"slug": "kavovarky", "name": "Кавоварки", "url_path": "/uk/elektronika/tehnika-dlya-kuhni/kavovarki-kavomolki/"},
     {"slug": "velosypedy", "name": "Велосипеди", "url_path": "/uk/sport-vidpochinok/velosipedi/"},
     {"slug": "instrumenty", "name": "Інструменти", "url_path": "/uk/dom-i-sad/instrumenty/"},
     {"slug": "mebel", "name": "Меблі", "url_path": "/uk/dom-i-sad/mebel/"},

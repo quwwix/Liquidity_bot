@@ -99,7 +99,9 @@ def _parse_price_from_json(price_data: Any) -> float | None:
 
 
 def _fetch_html(url: str) -> str | None:
+    import logging as _logging
     import warnings
+    _logging.getLogger("scrapling").setLevel(_logging.ERROR)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         try:
