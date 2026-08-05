@@ -79,14 +79,19 @@ def _fetch_page(url: str):
         )
     except Exception as e:
         logger.warning("StealthyFetcher failed for %s: %s, trying DynamicFetcher", url, e)
-        from scrapling.fetchers import DynamicFetcher
-        return DynamicFetcher.fetch(
-            url,
-            headless=True,
-            network_idle=True,
-            wait_selector='a[href*="ID"]',
-            timeout=60000,
-        )
+        try:
+            from scrapling.fetchers import DynamicFetcher
+            return DynamicFetcher.fetch(
+                url,
+                headless=True,
+                network_idle=True,
+                wait_selector='a[href*="ID"]',
+                timeout=60000,
+            )
+        except Exception as e2:
+            logger.warning("DynamicFetcher failed for %s: %s, trying HTTP Fetcher", url, e2)
+            from scrapling.fetchers import Fetcher
+            return Fetcher.fetch(url, follow_redirects=True, timeout=30000)
 
 
 def _fetch_detail_page(url: str):
@@ -99,8 +104,13 @@ def _fetch_detail_page(url: str):
             timeout=45000,
         )
     except Exception as e:
-        logger.warning("Detail fetch failed for %s: %s", url, e)
-        return None
+        logger.warning("Detail fetch failed for %s: %s, trying HTTP Fetcher", url, e)
+        try:
+            from scrapling.fetchers import Fetcher
+            return Fetcher.fetch(url, follow_redirects=True, timeout=30000)
+        except Exception as e2:
+            logger.error("HTTP Fetcher detail failed for %s: %s", url, e2)
+            return None
 
 
 def _enrich_listing_from_detail(listing: ScrapedListing) -> None:
