@@ -10,7 +10,7 @@ CATEGORIES = [
     {"slug": "kompyutery", "name": "Комп'ютери", "url_path": "/uk/elektronika/noutbuki-i-kompyutery/nastolnye-kompyutery/"},
     {"slug": "igrovi-konsoli", "name": "Ігрові консолі", "url_path": "/uk/elektronika/igry-i-igrovye-pristavki/pristavki/"},
     {"slug": "navushnyky", "name": "Навушники", "url_path": "/uk/elektronika/audiotehnika/naushniki/"},
-    {"slug": "smart-godynnyky", "name": "Смарт-годинники", "url_path": "/uk/elektronika/telefony-i-aksesuary/smart-chasy-fityes-braslety/"},
+    {"slug": "smart-godynnyky", "name": "Смарт-годинники", "url_path": "/uk/elektronika/telefony-i-aksesuary/smart-chasy-fitnes-braslety/"},
     {"slug": "fotoaparaty", "name": "Фотоапарати", "url_path": "/uk/elektronika/fotovideo/"},
     {"slug": "televizory", "name": "Телевізори", "url_path": "/uk/elektronika/tv-videotehnika/televizory/"},
     {"slug": "pylososy", "name": "Пилососи", "url_path": "/uk/elektronika/tehnika-dlya-doma/pylesosy/"},
