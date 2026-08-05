@@ -101,26 +101,18 @@ def _parse_price_from_json(price_data: Any) -> float | None:
 def _fetch_html(url: str) -> str | None:
     import warnings
     with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", message=".*deprecated.*")
+        warnings.simplefilter("ignore")
         try:
             from scrapling import Fetcher
             fetcher = Fetcher()
             response = fetcher.get(url, headers={"Referer": "https://www.google.com/"})
             if response.status == 200:
                 return response.text
-            logger.warning("HTTP %d for %s (scrapling)", response.status, url)
+            logger.warning("HTTP %d for %s", response.status, url)
+            return None
         except Exception as e:
-            logger.warning("Scrapling failed for %s: %s, trying httpx", url, e)
-
-    try:
-        response = httpx.get(url, headers=HEADERS, follow_redirects=True, timeout=30.0)
-        if response.status_code == 200:
-            return response.text
-        logger.warning("HTTP %d for %s (httpx)", response.status_code, url)
-    except Exception as e:
-        logger.error("All fetchers failed for %s: %s", url, e)
-
-    return None
+            logger.error("Failed to fetch %s: %s", url, e)
+            return None
 
 
 def _extract_next_data(html: str) -> dict | None:
