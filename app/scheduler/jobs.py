@@ -37,12 +37,12 @@ async def run_daily_scrape() -> None:
             category_id = await upsert_category(db, cat["slug"], cat["name"], cat["url_path"])
 
             import asyncio
-            listings = await asyncio.to_thread(scrape_category, cat["url_path"], settings.price_min, settings.price_max, enrich_details=False)
+            import json as json_mod
+            listings = await asyncio.to_thread(scrape_category, cat["url_path"], settings.price_min, settings.price_max)
             active_ids: set[str] = set()
 
             for listing in listings:
                     if settings.price_min <= listing.price <= settings.price_max:
-                        import json
                         await upsert_listing(
                             db,
                             listing.olx_id,
@@ -66,8 +66,8 @@ async def run_daily_scrape() -> None:
                             negotiable=listing.negotiable,
                             views_count=listing.views_count,
                             images_count=listing.images_count,
-                            images_json=json.dumps(listing.images, ensure_ascii=False),
-                            params_json=json.dumps(listing.params, ensure_ascii=False),
+                            images_json=json_mod.dumps(listing.images, ensure_ascii=False),
+                            params_json=json_mod.dumps(listing.params, ensure_ascii=False),
                         )
                         active_ids.add(listing.olx_id)
                         total_found += 1

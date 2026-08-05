@@ -1,15 +1,33 @@
+import json
 import logging
 import re
 import time
 from dataclasses import dataclass, field
+from typing import Any
 from urllib.parse import urljoin
+
+import httpx
 
 from app.scraper.categories import OLX_BASE, CATEGORIES, build_search_url
 
 logger = logging.getLogger(__name__)
 
 MAX_PAGES = 25
-PAGE_DELAY = 2.0
+PAGE_DELAY = 1.5
+
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "uk-UA,uk;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Connection": "keep-alive",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+    "Sec-Fetch-User": "?1",
+    "Upgrade-Insecure-Requests": "1",
+    "Cache-Control": "max-age=0",
+}
 
 
 @dataclass
@@ -37,7 +55,6 @@ class ScrapedListing:
     images_count: int = 0
     images: list = field(default_factory=list)
     params: dict = field(default_factory=dict)
-    raw_html: str = ""
 
 
 def _extract_olx_id(url: str) -> str | None:
@@ -60,231 +77,211 @@ def _parse_price(text: str) -> float | None:
     return value
 
 
-def _safe_text(elements, default="") -> str:
+def _parse_price_from_json(price_data: Any) -> float | None:
+    if isinstance(price_data, dict):
+        value = price_data.get("regularPrice", {}).get("value")
+        if value is None:
+            value = price_data.get("displayValue")
+        if value is not None:
+            if isinstance(value, (int, float)):
+                return float(value) if value >= 100 else None
+            if isinstance(value, str):
+                return _parse_price(value)
+
+        display = price_data.get("displayValue", "")
+        if display:
+            return _parse_price(display)
+    if isinstance(price_data, (int, float)):
+        return float(price_data) if price_data >= 100 else None
+    if isinstance(price_data, str):
+        return _parse_price(price_data)
+    return None
+
+
+def _fetch_html(url: str) -> str | None:
     try:
-        return elements[0].text.strip() if elements else default
-    except Exception:
-        return default
-
-
-def _fetch_page(url: str):
-    try:
-        from scrapling.fetchers import StealthyFetcher
-        return StealthyFetcher.fetch(
-            url,
-            headless=True,
-            network_idle=True,
-            wait_selector='[data-cy="l-card"], [data-testid="l-card"], a[href*="ID"]',
-            timeout=60000,
-        )
-    except Exception as e:
-        logger.warning("StealthyFetcher failed for %s: %s, trying DynamicFetcher", url, e)
-        try:
-            from scrapling.fetchers import DynamicFetcher
-            return DynamicFetcher.fetch(
-                url,
-                headless=True,
-                network_idle=True,
-                wait_selector='a[href*="ID"]',
-                timeout=60000,
-            )
-        except Exception as e2:
-            logger.warning("DynamicFetcher failed for %s: %s, trying HTTP Fetcher", url, e2)
-            from scrapling.fetchers import Fetcher
-            return Fetcher.get(url)
-
-
-def _fetch_detail_page(url: str):
-    try:
-        from scrapling.fetchers import StealthyFetcher
-        return StealthyFetcher.fetch(
-            url,
-            headless=True,
-            network_idle=True,
-            timeout=45000,
-        )
-    except Exception as e:
-        logger.warning("Detail fetch failed for %s: %s, trying HTTP Fetcher", url, e)
-        try:
-            from scrapling.fetchers import Fetcher
-            return Fetcher.get(url)
-        except Exception as e2:
-            logger.error("HTTP Fetcher detail failed for %s: %s", url, e2)
+        with httpx.Client(headers=HEADERS, follow_redirects=True, timeout=30.0) as client:
+            response = client.get(url)
+            if response.status_code == 200:
+                return response.text
+            logger.warning("HTTP %d for %s", response.status_code, url)
             return None
-
-
-def _enrich_listing_from_detail(listing: ScrapedListing) -> None:
-    page = _fetch_detail_page(listing.url)
-    if page is None:
-        return
-
-    try:
-        desc_el = page.css('[data-cy="ad_description"] div, [data-testid="ad-description"] div, .css-bgzo2k')
-        listing.description = _safe_text(desc_el)
-
-        seller_el = page.css('[data-testid="user-profile-link"] h4, .css-1lcorn2 h4, [data-cy="seller-card"] h4')
-        listing.seller_name = _safe_text(seller_el)
-
-        seller_type_el = page.css('[data-testid="seller-type"], .css-1oa3r68')
-        listing.seller_type = _safe_text(seller_type_el)
-
-        loc_el = page.css('[data-testid="location-breadcrumb"], [data-cy="location-breadcrumb"], .css-7wz4ol')
-        listing.location_full = _safe_text(loc_el)
-        if listing.location_full:
-            parts = [p.strip() for p in listing.location_full.split(",")]
-            if len(parts) >= 2:
-                listing.location_city = parts[0]
-                listing.location_region = parts[-1]
-            elif len(parts) == 1:
-                listing.location_city = parts[0]
-
-        date_el = page.css('[data-cy="ad-posted-at"], span[data-testid="ad-posted-at"], .css-19yf5eus')
-        listing.listing_date = _safe_text(date_el)
-
-        breadcrumb_el = page.css('[data-testid="breadcrumb"], nav[aria-label="Breadcrumb"] a, .css-1itdiow a')
-        listing.category_breadcrumb = " > ".join(
-            el.text.strip() for el in breadcrumb_el if el.text.strip()
-        )
-
-        condition_el = page.css('[data-testid="ad-param-state"] .css-1c4ggqp, li[data-testid="dom-value"]:first-child')
-        listing.condition = _safe_text(condition_el)
-
-        delivery_el = page.css('[data-testid="couriers-delivery-badge"], [data-cy="delivery-badge"]')
-        listing.delivery_available = bool(delivery_el)
-
-        safe_el = page.css('[data-testid="safe-deal-badge"], [data-cy="safe-deal-badge"]')
-        listing.safe_deal = bool(safe_el)
-
-        neg_el = page.css('[data-testid="negotiable-badge"], [data-cy="negotiable-badge"]')
-        listing.negotiable = bool(neg_el)
-
-        views_el = page.css('[data-testid="ad-statistics-views"], .css-19c04p3')
-        views_text = _safe_text(views_el)
-        if views_text:
-            nums = re.findall(r"\d+", views_text.replace(" ", ""))
-            if nums:
-                listing.views_count = int(nums[0])
-
-        imgs = page.css('img[data-testid="ad-photo"], div[data-testid="ad-photo-gallery"] img, .css-1ytkscc img')
-        listing.images_count = len(imgs)
-        listing.images = [img.attrib.get("src", "") for img in imgs if img.attrib.get("src")]
-
-        params: dict = {}
-        param_items = page.css('li[data-testid="dom-value"], ul.css-sfcl1s li, div.css-171flfm li')
-        for item in param_items:
-            label_el = item.css('p.css-b5m1rv, p[data-testid="param-label"], span')
-            value_el = item.css('p.css-1c4ggqp, a.css-11rb0qj, p[data-testid="param-value"]')
-            label = _safe_text(label_el)
-            value = _safe_text(value_el)
-            if label and value:
-                params[label] = value
-        listing.params = params
-
-        phone_el = page.css('[data-testid="call-link"], a[href^="tel:"]')
-        if phone_el:
-            href = phone_el[0].attrib.get("href", "")
-            listing.phone = href.replace("tel:", "").strip()
-
     except Exception as e:
-        logger.warning("Error enriching listing %s: %s", listing.olx_id, e)
+        logger.error("Failed to fetch %s: %s", url, e)
+        return None
 
 
-def _parse_listings_from_page(page) -> list[ScrapedListing]:
+def _extract_next_data(html: str) -> dict | None:
+    match = re.search(r'<script\s+id="__NEXT_DATA__"\s+type="application/json"[^>]*>(.*?)</script>', html, re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group(1))
+        except json.JSONDecodeError as e:
+            logger.warning("Failed to parse __NEXT_DATA__ JSON: %s", e)
+    return None
+
+
+def _parse_listings_from_next_data(data: dict) -> list[ScrapedListing]:
     listings: list[ScrapedListing] = []
     seen_ids: set[str] = set()
 
-    cards = page.css('[data-cy="l-card"], [data-testid="l-card"], div[data-id]')
-    if not cards:
-        cards = page.css('div[data-testid="listing-grid"] > div, li.css-1sw7q4x')
+    try:
+        props = data.get("props", {}).get("pageProps", {})
 
-    for card in cards:
-        link_el = card.css('a[href*="/d/"], a[href*="obyavlenie"], a[href*="ID"]')
-        if not link_el:
-            link_el = card.css("a[href]")
-        if not link_el:
-            continue
+        ads = props.get("ads", [])
+        if not ads:
+            listing_data = props.get("data", {})
+            ads = listing_data.get("ads", [])
+        if not ads:
+            ads = props.get("listingData", {}).get("listing", [])
+        if not ads:
+            search_data = props.get("searchData", {})
+            ads = search_data.get("ads", [])
+        if not ads:
+            initial_data = props.get("initialData", {})
+            ads = initial_data.get("ads", [])
+            if not ads:
+                ads = initial_data.get("listing", [])
+        if not ads:
+            for key, val in props.items():
+                if isinstance(val, dict):
+                    candidate = val.get("ads", [])
+                    if isinstance(candidate, list) and len(candidate) > 5:
+                        ads = candidate
+                        break
 
-        href = link_el[0].attrib.get("href", "")
-        if not href or "/d/" not in href and "ID" not in href:
-            continue
+        logger.info("Found %d ads in __NEXT_DATA__", len(ads))
 
+        for ad in ads:
+            if not isinstance(ad, dict):
+                continue
+
+            ad_id = str(ad.get("id", ""))
+            if not ad_id or ad_id in seen_ids:
+                continue
+
+            is_business = ad.get("isBusiness", False) or ad.get("business", False)
+            if is_business:
+                continue
+
+            promotion = ad.get("promotion", {})
+            if isinstance(promotion, dict) and promotion.get("highlighted"):
+                pass
+
+            title = ad.get("title", "").strip()
+            if not title:
+                continue
+
+            price = None
+            price_data = ad.get("price", {})
+            price = _parse_price_from_json(price_data)
+            if price is None:
+                continue
+
+            url_str = ad.get("url", "")
+            if not url_str:
+                slug = ad.get("slug", "")
+                if slug and ad_id:
+                    url_str = f"{OLX_BASE}/d/uk/obyavlennya/{slug}-ID{ad_id}.html"
+            if not url_str.startswith("http"):
+                url_str = urljoin(OLX_BASE, url_str)
+
+            olx_id = _extract_olx_id(url_str) or ad_id
+
+            location = ad.get("location", {})
+            city_name = ""
+            region_name = ""
+            location_full = ""
+            if isinstance(location, dict):
+                city_obj = location.get("city", {})
+                region_obj = location.get("region", {})
+                if isinstance(city_obj, dict):
+                    city_name = city_obj.get("name", "")
+                elif isinstance(city_obj, str):
+                    city_name = city_obj
+                if isinstance(region_obj, dict):
+                    region_name = region_obj.get("name", "")
+                elif isinstance(region_obj, str):
+                    region_name = region_obj
+                location_full = location.get("pathName", "")
+                if not location_full and city_name:
+                    location_full = f"{city_name}, {region_name}" if region_name else city_name
+
+            photos = ad.get("photos", []) or ad.get("images", [])
+            images_list = []
+            if isinstance(photos, list):
+                for photo in photos:
+                    if isinstance(photo, dict):
+                        img_url = photo.get("link", "") or photo.get("url", "")
+                        if img_url:
+                            images_list.append(img_url)
+                    elif isinstance(photo, str):
+                        images_list.append(photo)
+
+            params_dict = {}
+            ad_params = ad.get("params", [])
+            if isinstance(ad_params, list):
+                for p in ad_params:
+                    if isinstance(p, dict):
+                        key = p.get("key", "") or p.get("name", "")
+                        val_obj = p.get("value", {})
+                        if isinstance(val_obj, dict):
+                            val_str = val_obj.get("label", "") or val_obj.get("key", "")
+                        else:
+                            val_str = str(val_obj) if val_obj else ""
+                        if key and val_str:
+                            params_dict[key] = val_str
+
+            description = ad.get("description", "")
+            created_time = ad.get("createdTime", "") or ad.get("created_time", "") or ad.get("lastRefreshTime", "")
+
+            seen_ids.add(olx_id)
+            listing = ScrapedListing(
+                olx_id=olx_id,
+                title=title,
+                price=price,
+                url=url_str,
+                is_business=is_business,
+                description=description[:500] if description else "",
+                location_city=city_name,
+                location_region=region_name,
+                location_full=location_full,
+                listing_date=created_time,
+                images_count=len(images_list),
+                images=images_list[:5],
+                params=params_dict,
+            )
+            listings.append(listing)
+
+    except Exception as e:
+        logger.exception("Error parsing __NEXT_DATA__ ads: %s", e)
+
+    return listings
+
+
+def _parse_listings_from_html(html: str) -> list[ScrapedListing]:
+    listings: list[ScrapedListing] = []
+    seen_ids: set[str] = set()
+
+    pattern = re.compile(r'href="([^"]*?/d/[^"]*?ID[A-Za-z0-9]+\.html[^"]*?)"')
+    matches = pattern.findall(html)
+
+    for href in matches:
         url = urljoin(OLX_BASE, href.split("#")[0])
         olx_id = _extract_olx_id(url)
         if not olx_id or olx_id in seen_ids:
             continue
 
-        business_badge = card.css('[data-testid="business-badge"], .css-1wws9er, [data-cy="ad-business-badge"]')
-        if business_badge:
-            continue
-
-        title_el = card.css('[data-cy="ad-card-title"], h6, h4, p[data-testid="ad-title"]')
-        title = title_el[0].text.strip() if title_el else ""
-        if not title:
-            title = link_el[0].attrib.get("title", "").strip()
+        title_match = re.search(
+            rf'href="{re.escape(href)}"[^>]*?title="([^"]+)"',
+            html,
+        )
+        title = title_match.group(1).strip() if title_match else ""
         if not title:
             continue
-
-        price_el = card.css('[data-testid="ad-price"], p[data-testid="ad-price"], .css-10b0gli')
-        price_text = price_el[0].text.strip() if price_el else ""
-        price = _parse_price(price_text)
-        if price is None:
-            continue
-
-        location_el = card.css('[data-testid="location-date"], p.css-1mwdrlh')
-        location_raw = _safe_text(location_el)
-        city = ""
-        if location_raw:
-            city = location_raw.split("-")[0].strip().split(",")[0].strip()
 
         seen_ids.add(olx_id)
-        listing = ScrapedListing(
-            olx_id=olx_id,
-            title=title,
-            price=price,
-            url=url,
-            location_city=city,
-        )
-        listings.append(listing)
-
-    if not listings:
-        listings = _fallback_parse(page)
-
-    return listings
-
-
-def _fallback_parse(page) -> list[ScrapedListing]:
-    listings: list[ScrapedListing] = []
-    seen: set[str] = set()
-
-    for link in page.css('a[href*="ID"]'):
-        href = link.attrib.get("href", "")
-        url = urljoin(OLX_BASE, href.split("#")[0])
-        olx_id = _extract_olx_id(url)
-        if not olx_id or olx_id in seen:
-            continue
-
-        parent = link.parent
-        price_text = ""
-        title = link.text.strip() or link.attrib.get("title", "")
-
-        for _ in range(5):
-            if parent is None:
-                break
-            price_el = parent.css('[data-testid="ad-price"], .css-10b0gli, p:contains("грн")')
-            if price_el:
-                price_text = price_el[0].text.strip()
-            if not title:
-                title_el = parent.css("h6, h4")
-                if title_el:
-                    title = title_el[0].text.strip()
-            if price_text and title:
-                break
-            parent = getattr(parent, "parent", None)
-
-        price = _parse_price(price_text)
-        if price and title:
-            seen.add(olx_id)
-            listings.append(ScrapedListing(olx_id=olx_id, title=title, price=price, url=url))
+        listings.append(ScrapedListing(olx_id=olx_id, title=title, price=0, url=url))
 
     return listings
 
@@ -300,13 +297,22 @@ def scrape_category(url_path: str, price_min: int, price_max: int, enrich_detail
 
         logger.info("Scraping %s (page %d)", url, page_num)
 
-        try:
-            page = _fetch_page(url)
-        except Exception as e:
-            logger.error("Failed to scrape %s: %s", url, e)
+        html = _fetch_html(url)
+        if html is None:
+            logger.error("No HTML for %s, stopping", url)
             break
 
-        page_listings = _parse_listings_from_page(page)
+        page_listings: list[ScrapedListing] = []
+
+        next_data = _extract_next_data(html)
+        if next_data:
+            page_listings = _parse_listings_from_next_data(next_data)
+            logger.info("Parsed %d listings from __NEXT_DATA__", len(page_listings))
+
+        if not page_listings:
+            page_listings = _parse_listings_from_html(html)
+            logger.info("Parsed %d listings from HTML fallback", len(page_listings))
+
         if not page_listings:
             logger.info("No listings on page %d, stopping", page_num)
             break
@@ -315,9 +321,6 @@ def scrape_category(url_path: str, price_min: int, price_max: int, enrich_detail
         for listing in page_listings:
             if listing.olx_id not in seen_ids:
                 seen_ids.add(listing.olx_id)
-                if enrich_details:
-                    _enrich_listing_from_detail(listing)
-                    time.sleep(1.0)
                 all_listings.append(listing)
                 new_count += 1
 
