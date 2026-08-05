@@ -37,7 +37,7 @@ async def run_daily_scrape() -> None:
             category_id = await upsert_category(db, cat["slug"], cat["name"], cat["url_path"])
 
             import asyncio
-            listings = await asyncio.to_thread(scrape_category, cat["url_path"], settings.price_min, settings.price_max, enrich_details=True)
+            listings = await asyncio.to_thread(scrape_category, cat["url_path"], settings.price_min, settings.price_max, enrich_details=False)
             active_ids: set[str] = set()
 
             for listing in listings:
