@@ -6,28 +6,12 @@ from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import urljoin
 
-import httpx
-
 from app.scraper.categories import OLX_BASE, CATEGORIES, build_search_url
 
 logger = logging.getLogger(__name__)
 
 MAX_PAGES = 25
-PAGE_DELAY = 1.5
-
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-    "Accept-Language": "uk-UA,uk;q=0.9,en-US;q=0.8,en;q=0.7",
-    "Accept-Encoding": "gzip, deflate, br",
-    "Connection": "keep-alive",
-    "Sec-Fetch-Dest": "document",
-    "Sec-Fetch-Mode": "navigate",
-    "Sec-Fetch-Site": "none",
-    "Sec-Fetch-User": "?1",
-    "Upgrade-Insecure-Requests": "1",
-    "Cache-Control": "max-age=0",
-}
+PAGE_DELAY = 1.0
 
 
 @dataclass
@@ -71,29 +55,32 @@ def _parse_price(text: str) -> float | None:
     cleaned = re.sub(r"[^\d]", "", text.replace("\xa0", "").replace(" ", ""))
     if not cleaned:
         return None
-    value = float(cleaned)
-    if value < 100:
+    try:
+        value = float(cleaned)
+        return value if value > 0 else None
+    except ValueError:
         return None
-    return value
 
 
 def _parse_price_from_json(price_data: Any) -> float | None:
     if isinstance(price_data, dict):
-        value = price_data.get("regularPrice", {}).get("value")
-        if value is None:
-            value = price_data.get("displayValue")
-        if value is not None:
-            if isinstance(value, (int, float)):
-                return float(value) if value >= 100 else None
-            if isinstance(value, str):
-                return _parse_price(value)
+        val = price_data.get("value")
+        if val is not None and isinstance(val, (int, float)) and val > 0:
+            return float(val)
+        
+        reg = price_data.get("regularPrice", {})
+        if isinstance(reg, dict):
+            val = reg.get("value")
+            if val is not None and isinstance(val, (int, float)) and val > 0:
+                return float(val)
 
         display = price_data.get("displayValue", "")
         if display:
-            return _parse_price(display)
-    if isinstance(price_data, (int, float)):
-        return float(price_data) if price_data >= 100 else None
-    if isinstance(price_data, str):
+            return _parse_price(str(display))
+            
+    elif isinstance(price_data, (int, float)) and price_data > 0:
+        return float(price_data)
+    elif isinstance(price_data, str):
         return _parse_price(price_data)
     return None
 
@@ -127,34 +114,33 @@ def _extract_next_data(html: str) -> dict | None:
     return None
 
 
+def _find_ads_recursive(obj: Any) -> list:
+    if isinstance(obj, dict):
+        if "ads" in obj and isinstance(obj["ads"], list) and len(obj["ads"]) > 0:
+            first = obj["ads"][0]
+            if isinstance(first, dict) and ("id" in first or "title" in first):
+                return obj["ads"]
+        for k, v in obj.items():
+            if k in ("tracking", "seo"):
+                continue
+            res = _find_ads_recursive(v)
+            if res:
+                return res
+    elif isinstance(obj, list):
+        for item in obj:
+            res = _find_ads_recursive(item)
+            if res:
+                return res
+    return []
+
+
 def _parse_listings_from_next_data(data: dict) -> list[ScrapedListing]:
     listings: list[ScrapedListing] = []
     seen_ids: set[str] = set()
 
     try:
         props = data.get("props", {}).get("pageProps", {})
-
-        ads = props.get("ads", [])
-        if not ads:
-            listing_data = props.get("data", {})
-            ads = listing_data.get("ads", [])
-        if not ads:
-            ads = props.get("listingData", {}).get("listing", [])
-        if not ads:
-            search_data = props.get("searchData", {})
-            ads = search_data.get("ads", [])
-        if not ads:
-            initial_data = props.get("initialData", {})
-            ads = initial_data.get("ads", [])
-            if not ads:
-                ads = initial_data.get("listing", [])
-        if not ads:
-            for key, val in props.items():
-                if isinstance(val, dict):
-                    candidate = val.get("ads", [])
-                    if isinstance(candidate, list) and len(candidate) > 5:
-                        ads = candidate
-                        break
+        ads = _find_ads_recursive(props)
 
         logger.info("Found %d ads in __NEXT_DATA__", len(ads))
 
@@ -170,17 +156,11 @@ def _parse_listings_from_next_data(data: dict) -> list[ScrapedListing]:
             if is_business:
                 continue
 
-            promotion = ad.get("promotion", {})
-            if isinstance(promotion, dict) and promotion.get("highlighted"):
-                pass
-
             title = ad.get("title", "").strip()
             if not title:
                 continue
 
-            price = None
-            price_data = ad.get("price", {})
-            price = _parse_price_from_json(price_data)
+            price = _parse_price_from_json(ad.get("price"))
             if price is None:
                 continue
 
@@ -269,25 +249,37 @@ def _parse_listings_from_html(html: str) -> list[ScrapedListing]:
     listings: list[ScrapedListing] = []
     seen_ids: set[str] = set()
 
-    pattern = re.compile(r'href="([^"]*?/d/[^"]*?ID[A-Za-z0-9]+\.html[^"]*?)"')
-    matches = pattern.findall(html)
+    try:
+        from scrapling import Adaptor
+        page = Adaptor(html)
+        cards = page.css('[data-cy="l-card"], [data-testid="l-card"], div[data-id]')
+        for card in cards:
+            link_el = card.css('a[href*="/d/"], a[href*="obyavlenie"], a[href*="ID"]')
+            if not link_el:
+                continue
+            href = link_el[0].attrib.get("href", "")
+            if not href:
+                continue
+            url = urljoin(OLX_BASE, href.split("#")[0])
+            olx_id = _extract_olx_id(url)
+            if not olx_id or olx_id in seen_ids:
+                continue
 
-    for href in matches:
-        url = urljoin(OLX_BASE, href.split("#")[0])
-        olx_id = _extract_olx_id(url)
-        if not olx_id or olx_id in seen_ids:
-            continue
+            title_el = card.css('[data-cy="ad-card-title"], h6, h4, p[data-testid="ad-title"]')
+            title = title_el[0].text.strip() if title_el else link_el[0].attrib.get("title", "").strip()
+            if not title:
+                continue
 
-        title_match = re.search(
-            rf'href="{re.escape(href)}"[^>]*?title="([^"]+)"',
-            html,
-        )
-        title = title_match.group(1).strip() if title_match else ""
-        if not title:
-            continue
+            price_el = card.css('[data-testid="ad-price"], p[data-testid="ad-price"], .css-10b0gli')
+            price_text = price_el[0].text.strip() if price_el else ""
+            price = _parse_price(price_text)
+            if price is None:
+                continue
 
-        seen_ids.add(olx_id)
-        listings.append(ScrapedListing(olx_id=olx_id, title=title, price=0, url=url))
+            seen_ids.add(olx_id)
+            listings.append(ScrapedListing(olx_id=olx_id, title=title, price=price, url=url))
+    except Exception as e:
+        logger.warning("Scrapling HTML card parse failed: %s", e)
 
     return listings
 
