@@ -114,21 +114,24 @@ def _extract_next_data(html: str) -> dict | None:
     return None
 
 
-def _find_ads_recursive(obj: Any) -> list:
+def _find_ads_recursive(obj: Any, depth: int = 0) -> list:
+    if depth > 10:
+        return []
     if isinstance(obj, dict):
-        if "ads" in obj and isinstance(obj["ads"], list) and len(obj["ads"]) > 0:
-            first = obj["ads"][0]
-            if isinstance(first, dict) and ("id" in first or "title" in first):
-                return obj["ads"]
+        for key in ("ads", "listing", "advertisements", "items"):
+            if key in obj and isinstance(obj[key], list) and len(obj[key]) > 0:
+                first = obj[key][0]
+                if isinstance(first, dict) and ("id" in first or "title" in first or "url" in first):
+                    return obj[key]
         for k, v in obj.items():
-            if k in ("tracking", "seo"):
+            if k in ("tracking", "seo", "__N_SSP", "query"):
                 continue
-            res = _find_ads_recursive(v)
+            res = _find_ads_recursive(v, depth + 1)
             if res:
                 return res
     elif isinstance(obj, list):
         for item in obj:
-            res = _find_ads_recursive(item)
+            res = _find_ads_recursive(item, depth + 1)
             if res:
                 return res
     return []
@@ -153,8 +156,6 @@ def _parse_listings_from_next_data(data: dict) -> list[ScrapedListing]:
                 continue
 
             is_business = ad.get("isBusiness", False) or ad.get("business", False)
-            if is_business:
-                continue
 
             title = ad.get("title", "").strip()
             if not title:
