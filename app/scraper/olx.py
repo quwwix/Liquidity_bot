@@ -100,12 +100,13 @@ def _parse_price_from_json(price_data: Any) -> float | None:
 
 def _fetch_html(url: str) -> str | None:
     try:
-        with httpx.Client(headers=HEADERS, follow_redirects=True, timeout=30.0) as client:
-            response = client.get(url)
-            if response.status_code == 200:
-                return response.text
-            logger.warning("HTTP %d for %s", response.status_code, url)
-            return None
+        from scrapling import Fetcher
+        fetcher = Fetcher(auto_match=False)
+        response = fetcher.get(url, headers={"Referer": "https://www.google.com/"})
+        if response.status_code == 200:
+            return response.text
+        logger.warning("HTTP %d for %s", response.status_code, url)
+        return None
     except Exception as e:
         logger.error("Failed to fetch %s: %s", url, e)
         return None
