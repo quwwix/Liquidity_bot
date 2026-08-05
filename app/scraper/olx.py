@@ -250,8 +250,8 @@ def _parse_listings_from_html(html: str) -> list[ScrapedListing]:
     seen_ids: set[str] = set()
 
     try:
-        from scrapling import Adaptor
-        page = Adaptor(html)
+        from scrapling import Selector
+        page = Selector(html)
         cards = page.css('[data-cy="l-card"], [data-testid="l-card"], div[data-id]')
         for card in cards:
             link_el = card.css('a[href*="/d/"], a[href*="obyavlenie"], a[href*="ID"]')
