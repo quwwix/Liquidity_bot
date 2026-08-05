@@ -86,22 +86,23 @@ def _parse_price_from_json(price_data: Any) -> float | None:
 
 
 def _fetch_html(url: str) -> str | None:
-    import logging as _logging
-    import warnings
-    _logging.getLogger("scrapling").setLevel(_logging.ERROR)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        try:
-            from scrapling import Fetcher
-            fetcher = Fetcher()
-            response = fetcher.get(url, headers={"Referer": "https://www.google.com/"})
-            if response.status == 200:
+    import httpx
+    try:
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+            'Accept-Language': 'uk-UA,uk;q=0.9,en-US;q=0.8,en;q=0.7',
+            'Referer': 'https://www.google.com/'
+        }
+        with httpx.Client(verify=False, timeout=15.0) as client:
+            response = client.get(url, headers=headers)
+            if response.status_code == 200 and len(response.text) > 1000:
                 return response.text
-            logger.warning("HTTP %d for %s", response.status, url)
+            logger.warning("HTTP %d (len %d) for %s", response.status_code, len(response.text), url)
             return None
-        except Exception as e:
-            logger.error("Failed to fetch %s: %s", url, e)
-            return None
+    except Exception as e:
+        logger.error("Failed to fetch %s: %s", url, e)
+        return None
 
 
 def _extract_next_data(html: str) -> dict | None:
@@ -286,50 +287,103 @@ def _parse_listings_from_html(html: str) -> list[ScrapedListing]:
 
 
 def scrape_category(url_path: str, price_min: int, price_max: int, enrich_details: bool = False) -> list[ScrapedListing]:
+    cat = next((c for c in CATEGORIES if c["url_path"] == url_path), None)
+    query = cat["name"] if cat else url_path.strip("/").split("/")[-1].replace("-", " ")
+
+    import httpx
     all_listings: list[ScrapedListing] = []
     seen_ids: set[str] = set()
 
-    for page_num in range(1, MAX_PAGES + 1):
-        url = build_search_url(url_path, price_min, price_max)
-        if page_num > 1:
-            url += f"&page={page_num}"
-
-        logger.info("Scraping %s (page %d)", url, page_num)
-
-        html = _fetch_html(url)
-        if html is None:
-            logger.error("No HTML for %s, stopping", url)
-            break
-
-        page_listings: list[ScrapedListing] = []
-
-        next_data = _extract_next_data(html)
-        if next_data:
-            page_listings = _parse_listings_from_next_data(next_data)
-            logger.info("Parsed %d listings from __NEXT_DATA__", len(page_listings))
-
-        if not page_listings:
-            page_listings = _parse_listings_from_html(html)
-            logger.info("Parsed %d listings from HTML fallback", len(page_listings))
-
-        if not page_listings:
-            logger.info("No listings on page %d, stopping", page_num)
-            break
-
-        new_count = 0
-        for listing in page_listings:
-            if listing.olx_id not in seen_ids:
-                seen_ids.add(listing.olx_id)
-                all_listings.append(listing)
-                new_count += 1
-
-        if new_count == 0:
-            break
-
-        if page_num < MAX_PAGES:
-            time.sleep(PAGE_DELAY)
-
-    logger.info("Found %d listings for %s", len(all_listings), url_path)
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'application/json',
+    }
+    
+    url = "https://www.olx.ua/api/v1/offers/"
+    
+    try:
+        with httpx.Client(verify=False, timeout=15.0) as client:
+            for offset in range(0, 40 * MAX_PAGES, 40):
+                params = {
+                    'offset': offset,
+                    'limit': 40,
+                    'query': query,
+                    'filter_float_price:from': price_min,
+                    'filter_float_price:to': price_max,
+                    'private_business': 'private'
+                }
+                
+                logger.info("Scraping API for %s (offset %d)", query, offset)
+                res = client.get(url, headers=headers, params=params)
+                if res.status_code != 200:
+                    logger.warning("API returned HTTP %d for %s", res.status_code, query)
+                    break
+                
+                data = res.json()
+                ads = data.get('data', [])
+                if not ads:
+                    break
+                
+                for ad in ads:
+                    ad_id = str(ad.get('id', ''))
+                    if not ad_id or ad_id in seen_ids:
+                        continue
+                    
+                    seen_ids.add(ad_id)
+                    
+                    price = None
+                    params_dict = {}
+                    for p in ad.get('params', []):
+                        key = p.get('key', '') or p.get('name', '')
+                        val_obj = p.get('value', {})
+                        
+                        if key == 'price':
+                            if isinstance(val_obj, dict):
+                                price = val_obj.get('value')
+                        else:
+                            if isinstance(val_obj, dict):
+                                val = val_obj.get('label', '')
+                            else:
+                                val = str(val_obj)
+                            if key and val:
+                                params_dict[key] = val
+                                
+                    if price is None:
+                        continue
+                        
+                    title = ad.get('title', '')
+                    url_str = ad.get('url', '')
+                    description = ad.get('description', '')[:500]
+                    created_time = ad.get('created_time', '')
+                    
+                    location = ad.get('location', {})
+                    city_name = location.get('city', {}).get('name', '')
+                    region_name = location.get('region', {}).get('name', '')
+                    
+                    photos = ad.get('photos', [])
+                    images = [p.get('link') for p in photos if p.get('link')]
+                            
+                    listing = ScrapedListing(
+                        olx_id=ad_id,
+                        title=title,
+                        price=float(price),
+                        url=url_str,
+                        is_business=False,
+                        description=description,
+                        location_city=city_name,
+                        location_region=region_name,
+                        location_full=f"{city_name}, {region_name}" if region_name else city_name,
+                        listing_date=created_time,
+                        images_count=len(images),
+                        images=images[:5],
+                        params=params_dict,
+                    )
+                    all_listings.append(listing)
+                    
+                time.sleep(PAGE_DELAY)
+    except Exception as e:
+        logger.exception("Error scraping API for %s: %s", url_path, e)
+        
     return all_listings
 
 
