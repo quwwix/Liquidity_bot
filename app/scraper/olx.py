@@ -101,7 +101,6 @@ def _parse_price_from_json(price_data: Any) -> float | None:
 def _fetch_html(url: str) -> str | None:
     try:
         from scrapling import Fetcher
-        Fetcher.configure(auto_match=False)
         fetcher = Fetcher()
         response = fetcher.get(url, headers={"Referer": "https://www.google.com/"})
         if response.status == 200:
