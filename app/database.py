@@ -95,6 +95,23 @@ async def get_db() -> aiosqlite.Connection:
     db = await aiosqlite.connect(settings.database_path)
     db.row_factory = aiosqlite.Row
     await db.executescript(SCHEMA)
+    
+    # Auto-migrate new columns
+    new_cols = [
+        "description TEXT", "seller_name TEXT", "seller_type TEXT",
+        "location_city TEXT", "location_region TEXT", "location_full TEXT",
+        "phone TEXT", "listing_date TEXT", "category_breadcrumb TEXT",
+        "condition TEXT", "delivery_available INTEGER DEFAULT 0",
+        "safe_deal INTEGER DEFAULT 0", "negotiable INTEGER DEFAULT 0",
+        "views_count INTEGER DEFAULT 0", "images_count INTEGER DEFAULT 0",
+        "images_json TEXT", "params_json TEXT"
+    ]
+    for col in new_cols:
+        try:
+            await db.execute(f"ALTER TABLE listings ADD COLUMN {col}")
+        except Exception:
+            pass
+            
     await db.commit()
     return db
 
