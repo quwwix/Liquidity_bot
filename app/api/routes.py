@@ -110,6 +110,21 @@ async def health():
     return {"status": "ok"}
 
 
+@router.get("/reset-db")
+async def reset_database():
+    import os
+    from app.config import get_settings
+    settings = get_settings()
+    try:
+        if os.path.exists(settings.database_path):
+            os.remove(settings.database_path)
+            return {"status": "success", "message": "Базу даних успішно видалено! Натисніть 'Оновити дані' в боті, щоб зібрати все заново з нуля."}
+        else:
+            return {"status": "success", "message": "База даних вже була порожньою."}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
 @router.get("/trigger-scrape")
 async def trigger_scrape_endpoint():
     import asyncio, json
