@@ -48,9 +48,19 @@ async def check_and_run_initial_scrape():
     try:
         cursor = await db.execute("SELECT COUNT(*) as cnt FROM listings")
         row = await cursor.fetchone()
-        if row and row["cnt"] == 0:
-            logger.info("Database is empty, triggering initial scrape on startup...")
+        listing_count = row["cnt"] if row else 0
+        
+        cursor = await db.execute(
+            "SELECT COUNT(DISTINCT category_id) as cats FROM listings"
+        )
+        row = await cursor.fetchone()
+        cat_count = row["cats"] if row else 0
+        
+        if listing_count == 0 or cat_count < 5:
+            logger.info("Database has only %d listings in %d categories — triggering initial scrape...", listing_count, cat_count)
             await run_daily_scrape()
+        else:
+            logger.info("Database has %d listings in %d categories — skipping initial scrape", listing_count, cat_count)
     except Exception as e:
         logger.warning("Error checking initial scrape: %s", e)
     finally:
