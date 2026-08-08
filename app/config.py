@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     telegram_bot_token: str = ""
     my_chat_id: int = 0
     webapp_url: str = "http://localhost:8000"
-    database_path: str = "/data/liquidity.db"
+    database_path: str = "/var/data/liquidity.db"
     scrape_enabled: bool = True
 
     price_min: int = 4000
