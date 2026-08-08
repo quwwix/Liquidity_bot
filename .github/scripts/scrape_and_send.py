@@ -6,7 +6,7 @@ Runs on GitHub Actions (IP not blocked by OLX).
 import json
 import os
 import time
-import httpx
+from curl_cffi import requests
 
 OLX_API = "https://www.olx.ua/api/v1/offers/"
 RENDER_URL = os.environ["RENDER_URL"].rstrip("/")
@@ -54,7 +54,7 @@ PAGE_DELAY = 1.0
 CATEGORY_DELAY = 3.0
 
 
-def scrape_category(client: httpx.Client, cat: dict) -> list[dict]:
+def scrape_category(session, cat: dict) -> list[dict]:
     listings = []
     seen_ids = set()
     query = cat["name"]
@@ -68,7 +68,7 @@ def scrape_category(client: httpx.Client, cat: dict) -> list[dict]:
             "filter_float_price:to": PRICE_MAX,
         }
         try:
-            res = client.get(OLX_API, headers=HEADERS_OLX, params=params, timeout=15)
+            res = session.get(OLX_API, headers=HEADERS_OLX, params=params, timeout=15)
         except Exception as e:
             print(f"  Request error: {e}")
             break
@@ -128,11 +128,12 @@ def main():
     print(f"Starting scrape of {len(CATEGORIES)} categories...")
     all_data = []
 
-    with httpx.Client(verify=False, follow_redirects=True) as client:
+    # curl_cffi automatically handles TLS fingerprints
+    with requests.Session(impersonate="chrome120") as session:
         for i, cat in enumerate(CATEGORIES):
             print(f"[{i+1}/{len(CATEGORIES)}] {cat['name']}...", end=" ", flush=True)
-            listings = scrape_category(client, cat)
-            print(f"{len(listings)} listings")
+            listings = scrape_category(session, cat)
+            print() # newline after pages
 
             all_data.append({
                 "slug": cat["slug"],
@@ -147,11 +148,13 @@ def main():
     total = sum(len(c["listings"]) for c in all_data)
     print(f"\nTotal: {total} listings. Sending to Render...")
 
-    with httpx.Client(timeout=60) as client:
-        r = client.post(
+    # For ingest, we can just use normal requests
+    with requests.Session() as session:
+        r = session.post(
             f"{RENDER_URL}/api/ingest",
             json={"categories": all_data},
             headers={"X-Ingest-Token": INGEST_TOKEN},
+            timeout=60,
         )
         print(f"Ingest response: {r.status_code} — {r.text}")
 

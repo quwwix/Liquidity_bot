@@ -18,7 +18,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install httpx
+        run: pip install curl_cffi
 
       - name: Run scraper and send to Render
         env:
