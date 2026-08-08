@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     webapp_url: str = "http://localhost:8000"
     database_path: str = "/var/data/liquidity.db"
     scrape_enabled: bool = True
+    ingest_token: str = ""
 
     price_min: int = 4000
     price_max: int = 20000

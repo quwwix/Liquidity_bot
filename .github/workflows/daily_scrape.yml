@@ -1,0 +1,27 @@
+name: Daily OLX Scrape
+
+on:
+  schedule:
+    - cron: '0 5 * * *'   # 08:00 Kyiv time (UTC+3)
+  workflow_dispatch:        # дозволяє запустити вручну з GitHub UI
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install httpx
+
+      - name: Run scraper and send to Render
+        env:
+          RENDER_URL: ${{ secrets.RENDER_URL }}
+          INGEST_TOKEN: ${{ secrets.INGEST_TOKEN }}
+        run: python .github/scripts/scrape_and_send.py
