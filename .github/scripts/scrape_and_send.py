@@ -73,11 +73,13 @@ def scrape_category(client: httpx.Client, cat: dict) -> list[dict]:
             print(f"  Request error: {e}")
             break
 
+        print(f"  Page {page+1}: HTTP {res.status_code}", end=" ")
         if res.status_code != 200:
-            print(f"  HTTP {res.status_code} — stopping")
+            print(f"— blocked!")
             break
 
         ads = res.json().get("data", [])
+        print(f"— {len(ads)} ads")
         if not ads:
             break
 
